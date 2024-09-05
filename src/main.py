@@ -186,6 +186,7 @@ def StatusStabilizer(taskId: str, user, pdbc: DML, times: int = 0) -> int:
 def SetUp(taskId: str, user, pdbc: DML, refresh_token: bool = False) -> bool:
     """
     开机，返回是否开机成功
+    :param refresh_token:
     :param taskId:
     :param user:
     :param pdbc:
@@ -289,24 +290,21 @@ def choose_account(pdbc: DML, mark: bool = True):
 
 
 def choose_task(user, pdbc: DML):
+    GetTasks(user, pdbc)
     all_tasks = pdbc.query_all_record()
-    if not all_tasks:
-        GetTasks(user, pdbc)
-        return choose_task(user, pdbc)
-    else:
-        d_t = pdbc.query_config('default_task_id')
-        if d_t:
-            flag = input(
-                f"是否使用默认任务{[task.note for task in all_tasks if task.id == d_t][0]}({d_t})(Y/n): ").lower()
-            for task in all_tasks:
-                if task.id == d_t and (flag == '' or flag == 'y' or flag == 'yes'):
-                    return task
-        task = all_tasks[curses.wrapper(table, [task.to_risc_dict() for task in all_tasks])]
-        # 设置默认任务
+    d_t = pdbc.query_config('default_task_id')
+    if d_t:
         flag = input(
-            f"是否设置{[task.note for task in all_tasks if task.id == d_t][0]}({d_t})为默认任务(Y/n): ").lower()
-        if flag == '' or flag == 'y' or flag == 'yes':
-            pdbc.update_config('default_task_id', task.id)
+            f"是否使用默认任务{[task.note for task in all_tasks if task.id == d_t][0]}({d_t})(Y/n): ").lower()
+        for task in all_tasks:
+            if task.id == d_t and (flag == '' or flag == 'y' or flag == 'yes'):
+                return task
+    task = all_tasks[curses.wrapper(table, [task.to_risc_dict() for task in all_tasks])]
+    # 设置默认任务
+    flag = input(
+        f"是否设置{[task.note for task in all_tasks if task.id == d_t][0]}({d_t})为默认任务(Y/n): ").lower()
+    if flag == '' or flag == 'y' or flag == 'yes':
+        pdbc.update_config('default_task_id', task.id)
     return task
 
 
@@ -414,9 +412,12 @@ def main():
     # 更新Tasks
     task = choose_task(user, pdbc)
     # ShutDown(task.id, user, pdbc)
-    # 仅当状态为4（已关机）时，才执行开机操作
-    if task.status == 4:
-        SetUp(task.id, user, pdbc)
+    # 仅当状态为6（已关机）时，才执行开机操作
+    if int(task.status) == 6:
+        if SetUp(task.id, user, pdbc):
+            print("开机成功！")
+        else:
+            exit("开机失败！")
     # 启用本地ssh代理
     curses.wrapper(create_local_forwarding, task, pdbc)
     pass
