@@ -4,14 +4,14 @@
 #       使用保存的publicKey加密密码
 #           若登录成功，则保存Token
 #           若登录失败，则获取新的publicKey并重试
+import argparse
 import curses
 import json
 import re
+import requests
 from pathlib import PurePosixPath as Path
 from time import sleep
 from typing import Optional, Literal
-
-import requests
 
 from src import TMP_PATH, BASE_URL, DEFAULT_HEADERS
 from src.display import table
@@ -403,6 +403,11 @@ def create_local_forwarding(stdscr, task, pdbc: DML):
 
 
 def main():
+    # 添加一个-s参数
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-s', '--shutdown', help='shutdown the task', action='store_true')
+    args = parser.parse_args()
+
     s = requests.Session()
     # 移除默认的 Connection 头部
     if 'Connection' in s.headers:
@@ -413,6 +418,10 @@ def main():
     task = choose_task(user, pdbc)
     # ShutDown(task.id, user, pdbc)
     # 仅当状态为6（已关机）时，才执行开机操作
+    # 若存在-s参数，则执行关机指令
+    if args.shutdown:
+        ShutDown(task.id, user, pdbc)
+        exit("关机成功！")
     if int(task.status) == 6:
         if SetUp(task.id, user, pdbc):
             print("开机成功！")
