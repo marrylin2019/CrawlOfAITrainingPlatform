@@ -303,7 +303,7 @@ def choose_task(user, pdbc: DML):
     task = all_tasks[curses.wrapper(table, [task.to_risc_dict() for task in all_tasks])]
     # 设置默认任务
     flag = input(
-        f"是否设置{[task.note for task in all_tasks if task.id == d_t][0]}({d_t})为默认任务(Y/n): ").lower()
+        f"是否设置{task.note}({task.id})为默认任务(Y/n): ").lower()
     if flag == '' or flag == 'y' or flag == 'yes':
         pdbc.update_config('default_task_id', task.id)
     return task
