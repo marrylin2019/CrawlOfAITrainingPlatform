@@ -8,10 +8,11 @@ import argparse
 import curses
 import json
 import re
-import requests
 from pathlib import PurePosixPath as Path
 from time import sleep
 from typing import Optional, Literal
+
+import requests
 
 from src import TMP_PATH, BASE_URL, DEFAULT_HEADERS
 from src.display import table
@@ -154,7 +155,7 @@ def GetTasks(user, pdbc: DML, force_refresh_token: bool = False) -> dict:
             return GetTasks(user, pdbc, True)
         else:
             # 未知的请求错误
-            exit("未知的请求错误！")
+            exit("请求异常！服务器响应信息：" + resp['msg'])
     # 未发生错误
     # 把tasks信息写入数据库
     # print(resp['data']['records'])
@@ -215,7 +216,7 @@ def SetUp(taskId: str, user, pdbc: DML, refresh_token: bool = False) -> bool:
                 return SetUp(taskId, user, pdbc, True)
             else:
                 # 未知的请求错误
-                exit("未知的请求错误！")
+                exit("请求异常！服务器响应信息：" + resp['msg'])
         status = StatusStabilizer(taskId, user, pdbc)
         return status == 4
     return False
@@ -253,7 +254,7 @@ def ShutDown(taskId: str, user, pdbc: DML, refresh_token: bool = False) -> bool:
                 return SetUp(taskId, user, pdbc, True)
             else:
                 # 未知的请求错误
-                exit("未知的请求错误！")
+                exit("请求异常！服务器响应信息：" + resp['msg'])
         status = StatusStabilizer(taskId, user, pdbc)
         return status == 6
     return False
