@@ -164,9 +164,17 @@ def GetTasks(user, pdbc: DML, force_refresh_token: bool = False) -> dict:
     # 未发生错误
     # 把tasks信息写入数据库
     # print(resp['data']['records'])
+    # 删除数据库中不在当前任务列表中的任务
+    missing_tasks = [task for task in pdbc.query_all_record() if
+                     task.id not in [record['id'] for record in resp['data']['records']]]
+    print('\n'.join([f"任务[{task.note}]({task.id})缺失，已在数据库中删除！" for task in missing_tasks]))
+    pdbc.delete_records([task.id for task in missing_tasks])
+    # 删除默认任务
+    default_config_task = pdbc.query_config('default_task_id')
+    if default_config_task and default_config_task not in [record['id'] for record in resp['data']['records']]:
+        pdbc.update_config('default_task_id', '')
     pdbc.insert_records(resp['data']['records'])
     return resp
-    # print(resp.content.decode())
 
 
 def StatusStabilizer(taskId: str, user, pdbc: DML, times: int = 0) -> int:

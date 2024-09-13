@@ -41,13 +41,10 @@ class DDL:
             tasks = relationship('Tasks', back_populates='user')
 
             def to_dict(self) -> dict:
-                result = {}
-                for column in self.__table__.columns:
-                    if column.name == 'password' or column.name == 'token':
-                        result[column.name] = '******'
-                    else:
-                        result[column.name] = getattr(self, column.name)
-                return result
+                for col_key in self.__table__.columns.keys():
+                    if col_key in ['password', 'token']:
+                        setattr(self, col_key, '******')
+                return {col_key: getattr(self, col_key) for col_key in self.__table__.columns.keys()}
 
         return Users
 
@@ -158,6 +155,10 @@ class DML:
         self.__session.query(table).filter(condition).update(kwargs)
         self.__session.commit()
 
+    def delete(self, table, condition):
+        self.__session.query(table).filter(condition).delete()
+        self.__session.commit()
+
     def insert_user(self, account, password):
         self.insert(self.Tables['Users'], account=account, password=password)
 
@@ -213,6 +214,13 @@ class DML:
         for record in records:
             self.insert_record(record)
 
+    def delete_record(self, taskId: str):
+        self.delete(self.Tables['Tasks'], self.Tables['Tasks'].id == taskId)
+
+    def delete_records(self, taskIds: list[str]):
+        for taskId in taskIds:
+            self.delete_record(taskId)
+
     def update_config(self, key: str, value: str):
         table = self.Tables['Configs']
         if self.query(table, table.key == key):
@@ -227,6 +235,9 @@ class DML:
         """
         r = self.query(self.Tables['Configs'], self.Tables['Configs'].key == key)
         return r[0].value if r else None
+
+    def delete_config(self, key: str):
+        self.delete(self.Tables['Configs'], self.Tables['Configs'].key == key)
 
     def query_record(self, taskId: str):
         return self.query(self.Tables['Tasks'], self.Tables['Tasks'].id == taskId)[0]
