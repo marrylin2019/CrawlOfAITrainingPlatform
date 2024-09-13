@@ -7,7 +7,9 @@
 import argparse
 import curses
 import json
+import os
 import re
+import sys
 from pathlib import PurePosixPath as Path
 from time import sleep
 from typing import Optional, Literal
@@ -85,27 +87,30 @@ def Request(
 ) -> requests.Response:
     url = BASE_URL.with_path(str(path))
     headers = {**DEFAULT_HEADERS, **headers} if headers else DEFAULT_HEADERS
-    return requests.request(method, str(url), headers=headers, data=data, cookies=cookies)
+    try:
+        return requests.request(method, str(url), headers=headers, data=data, cookies=cookies)
+    except TimeoutError:
+        exit("网络连接异常！请检查网络连接！")
 
 
-def RequestDebug(
-        method: Literal['GET', 'POST'] = 'GET',
-        path: Path = Path(''),
-        cookies: Optional[dict] = None,
-        headers: Optional[dict] = None,
-        data: Optional[str] = None
-):
-    url = BASE_URL.with_path(str(path))
-    headers = {**DEFAULT_HEADERS, **headers} if headers else DEFAULT_HEADERS
-    resp = requests.Request(method, str(url), headers=headers, data=data, cookies=cookies)
-    prepared = requests.Session().prepare_request(resp)
-    print(f"Method: {prepared.method}")
-    print(f"URL: {prepared.url}")
-    print(f"Headers: {prepared.headers}")
-    print(f"Body: {prepared.body}")
-    # return prepared.headers
-    # return prepared
-    # response = requests.Session().send(prepared)
+# def RequestDebug(
+#         method: Literal['GET', 'POST'] = 'GET',
+#         path: Path = Path(''),
+#         cookies: Optional[dict] = None,
+#         headers: Optional[dict] = None,
+#         data: Optional[str] = None
+# ):
+#     url = BASE_URL.with_path(str(path))
+#     headers = {**DEFAULT_HEADERS, **headers} if headers else DEFAULT_HEADERS
+#     resp = requests.Request(method, str(url), headers=headers, data=data, cookies=cookies)
+#     prepared = requests.Session().prepare_request(resp)
+#     print(f"Method: {prepared.method}")
+#     print(f"URL: {prepared.url}")
+#     print(f"Headers: {prepared.headers}")
+#     print(f"Body: {prepared.body}")
+#     # return prepared.headers
+#     # return prepared
+#     # response = requests.Session().send(prepared)
 
 
 def GetTasks(user, pdbc: DML, force_refresh_token: bool = False) -> dict:
@@ -365,13 +370,17 @@ def forward_tunnel(local_port, remote_host, remote_port, transport):
         server.close()
 
 
-def create_local_forwarding(stdscr, task, pdbc: DML):
+def create_local_forwarding(task, pdbc: DML, client: paramiko.SSHClient):
     """
     创建本地ssh代理
+    :param client:
     :param task:
     :param pdbc:
     :return:
     """
+    # 清屏
+    os.system("cls")
+    print("正在创建本地ssh端口转发")
     # 获取本地ssh代理端口
     local_port = pdbc.query_config('ssh_tunnel_port')
     if not local_port:
@@ -380,7 +389,6 @@ def create_local_forwarding(stdscr, task, pdbc: DML):
         local_port = ssh_tunnel_port
 
     # 创建SSH客户端
-    client = paramiko.SSHClient()
     client.load_system_host_keys()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())  # 自动添加未知主机密钥
 
@@ -395,15 +403,17 @@ def create_local_forwarding(stdscr, task, pdbc: DML):
             remote_port=int(task.ssh_port),
             transport=client.get_transport()
         )
-        stdscr.erase()
-        stdscr.addstr(1, 0, 'SSH端口转发已建立，请务关闭本窗口！！！', curses.color_pair(1))
+        # 清屏
+        os.system("cls")
+        print("已创建本地ssh端口转发，请勿关闭此窗口！")
     except Exception as e:
         print(f"Failed to forward port: {e}")
     finally:
         client.close()
+        exit("Port forwarding stopped.")
 
 
-def main():
+def main(client: paramiko.SSHClient):
     # 添加一个-s参数
     parser = argparse.ArgumentParser()
     parser.add_argument('-s', '--shutdown', help='shutdown the task', action='store_true')
@@ -429,9 +439,26 @@ def main():
         else:
             exit("开机失败！")
     # 启用本地ssh代理
-    curses.wrapper(create_local_forwarding, task, pdbc)
+    create_local_forwarding(task, pdbc, client)
     pass
 
 
+# def signal_handler(signum, frame):
+#     print(f"Signal {signum} received, performing cleanup...")
+#     # Perform any cleanup here
+#     sys.exit(0)
+
 if __name__ == '__main__':
-    main()
+    # import signal
+    #
+    # # Register signal handlers
+    # signal.signal(signal.SIGINT, signal_handler)  # Handle Ctrl+C
+    # signal.signal(signal.SIGTERM, signal_handler)  # Handle kill
+    # signal.signal(signal.SIGTSTP, signal_handler)  # Handle Ctrl+Z
+    cli = paramiko.SSHClient()
+    try:
+        main(cli)
+    except KeyboardInterrupt as e:
+        print(111)
+        cli.close()
+        sys.exit("Program stopped by user.")

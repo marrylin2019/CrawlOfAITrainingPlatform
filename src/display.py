@@ -10,6 +10,9 @@ def table(stdscr, data_dict: list[dict]) -> Optional[int]:
 
     # 当前选中的用户索引
     selected_index = 0
+    # 清屏
+    stdscr.erase()
+    stdscr.refresh()
 
     # 列标题
     headers = [key.upper() for key in data_dict[0]]
