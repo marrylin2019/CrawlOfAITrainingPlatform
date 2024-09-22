@@ -167,7 +167,7 @@ def GetTasks(user, pdbc: DML, force_refresh_token: bool = False) -> dict:
     # 删除数据库中不在当前任务列表中的任务
     missing_tasks = [task for task in pdbc.query_all_record() if
                      task.id not in [record['id'] for record in resp['data']['records']]]
-    print('\n'.join([f"任务[{task.note}]({task.id})缺失，已在数据库中删除！" for task in missing_tasks]))
+    print('\n'.join([f"任务[{task.note}]({task.name})缺失，已在数据库中删除！" for task in missing_tasks]))
     pdbc.delete_records([task.id for task in missing_tasks])
     # 删除默认任务
     default_config_task = pdbc.query_config('default_task_id')
@@ -316,7 +316,7 @@ def choose_task(user, pdbc: DML):
     task = all_tasks[curses.wrapper(table, [task.to_risc_dict() for task in all_tasks])]
     # 设置默认任务
     flag = input(
-        f"是否设置{task.note}({task.id})为默认任务(Y/n): ").lower()
+        f"是否设置{task.note}({task.name})为默认任务(Y/n): ").lower()
     if flag == '' or flag == 'y' or flag == 'yes':
         pdbc.update_config('default_task_id', task.id)
     return task
@@ -388,7 +388,7 @@ def create_local_forwarding(task, pdbc: DML, client: paramiko.SSHClient):
     """
     # 清屏
     os.system("cls")
-    print("正在创建本地ssh端口转发")
+    print(f"正在创建本地ssh端口转发\n当前实例：{task.note}({task.name})\n当前ssh密码：{task.ssh_passwd}")
     # 获取本地ssh代理端口
     local_port = pdbc.query_config('ssh_tunnel_port')
     if not local_port:
@@ -467,6 +467,5 @@ if __name__ == '__main__':
     try:
         main(cli)
     except KeyboardInterrupt as e:
-        print(111)
         cli.close()
         sys.exit("Program stopped by user.")
