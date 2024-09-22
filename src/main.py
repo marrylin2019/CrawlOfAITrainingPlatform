@@ -1,20 +1,18 @@
-# 大致逻辑为：
-# 直接使用保存的Token进行登录
-#   若Token过期，则使用用户名密码登录
-#       使用保存的publicKey加密密码
-#           若登录成功，则保存Token
-#           若登录失败，则获取新的publicKey并重试
 import argparse
 import curses
 import json
 import os
 import re
+import socket
 import sys
+import threading
 from pathlib import PurePosixPath as Path
 from time import sleep
 from typing import Optional, Literal
 
+import paramiko
 import requests
+import select
 
 from src import TMP_PATH, BASE_URL, DEFAULT_HEADERS
 from src.display import table
@@ -78,6 +76,46 @@ class Login:
         self.__encrypted_passwd = base64.b64encode(encrypted_text).decode('utf-8')
 
 
+class ForwardServer(socket.socket):
+    def __init__(self, local_port, remote_host, remote_port, transport, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.bind(('127.0.0.1', local_port))
+        self.listen(5)
+        self.remote_host = remote_host
+        self.remote_port = remote_port
+        self.transport = transport
+
+    def handle(self, client_socket):
+        try:
+            chan = self.transport.open_channel('direct-tcpip', (self.remote_host, self.remote_port),
+                                               client_socket.getpeername())
+        except Exception as e:
+            print(f"Failed to open channel: {e}")
+            return
+
+        while True:
+            r, w, x = select.select([client_socket, chan], [], [])
+            if client_socket in r:
+                data = client_socket.recv(1024)
+                if len(data) == 0:
+                    break
+                chan.send(data)
+            if chan in r:
+                data = chan.recv(1024)
+                if len(data) == 0:
+                    break
+                client_socket.send(data)
+
+        chan.close()
+        client_socket.close()
+
+    def start(self):
+        while True:
+            client_socket, client_addr = self.accept()
+            threading.Thread(target=self.handle, args=(client_socket,)).start()
+
+
 def Request(
         method: Literal['GET', 'POST'] = 'GET',
         path: Path = Path(''),
@@ -91,26 +129,6 @@ def Request(
         return requests.request(method, str(url), headers=headers, data=data, cookies=cookies)
     except TimeoutError:
         exit("网络连接异常！请检查网络连接！")
-
-
-# def RequestDebug(
-#         method: Literal['GET', 'POST'] = 'GET',
-#         path: Path = Path(''),
-#         cookies: Optional[dict] = None,
-#         headers: Optional[dict] = None,
-#         data: Optional[str] = None
-# ):
-#     url = BASE_URL.with_path(str(path))
-#     headers = {**DEFAULT_HEADERS, **headers} if headers else DEFAULT_HEADERS
-#     resp = requests.Request(method, str(url), headers=headers, data=data, cookies=cookies)
-#     prepared = requests.Session().prepare_request(resp)
-#     print(f"Method: {prepared.method}")
-#     print(f"URL: {prepared.url}")
-#     print(f"Headers: {prepared.headers}")
-#     print(f"Body: {prepared.body}")
-#     # return prepared.headers
-#     # return prepared
-#     # response = requests.Session().send(prepared)
 
 
 def GetTasks(user, pdbc: DML, force_refresh_token: bool = False) -> dict:
@@ -273,7 +291,7 @@ def ShutDown(taskId: str, user, pdbc: DML, refresh_token: bool = False) -> bool:
     return False
 
 
-def choose_account(pdbc: DML, mark: bool = True):
+def choose_account(pdbc: DML, using_default=False, mark: bool = True):
     """
     用户选择要使用的账户
     :return:
@@ -284,13 +302,13 @@ def choose_account(pdbc: DML, mark: bool = True):
         account = input("输入用户名：\t")
         password = input("输入密码：\t")
         pdbc.insert_user(account, password)
-        return choose_account(pdbc, False)
+        return choose_account(pdbc, mark=False)
     else:
         # 存在用户信息，用户选择哪个用户登录
         # 存在默认用户，询问用户是否选择默认用户
         d_u = pdbc.query_config('default_user_account')
         if d_u:
-            flag = input(f"是否使用默认用户{d_u}(Y/n): ").lower()
+            flag = input(f"是否使用默认用户{d_u}(Y/n): ").lower() if not using_default else 'y'
             for user in all_users:
                 if user.account == d_u and (flag == '' or flag == 'y' or flag == 'yes'):
                     return user
@@ -303,13 +321,14 @@ def choose_account(pdbc: DML, mark: bool = True):
     return user
 
 
-def choose_task(user, pdbc: DML):
+def choose_task(user, pdbc: DML, using_default=False):
     GetTasks(user, pdbc)
     all_tasks = pdbc.query_all_record()
     d_t = pdbc.query_config('default_task_id')
     if d_t:
         flag = input(
-            f"是否使用默认任务{[task.note for task in all_tasks if task.id == d_t][0]}({d_t})(Y/n): ").lower()
+            f"是否使用默认任务{[task.note for task in all_tasks if task.id == d_t][0]}({d_t})(Y/n): "
+        ).lower() if not using_default else 'y'
         for task in all_tasks:
             if task.id == d_t and (flag == '' or flag == 'y' or flag == 'yes'):
                 return task
@@ -320,52 +339,6 @@ def choose_task(user, pdbc: DML):
     if flag == '' or flag == 'y' or flag == 'yes':
         pdbc.update_config('default_task_id', task.id)
     return task
-
-
-import paramiko
-import socket
-import select
-import threading
-
-
-class ForwardServer(socket.socket):
-    def __init__(self, local_port, remote_host, remote_port, transport, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.bind(('127.0.0.1', local_port))
-        self.listen(5)
-        self.remote_host = remote_host
-        self.remote_port = remote_port
-        self.transport = transport
-
-    def handle(self, client_socket):
-        try:
-            chan = self.transport.open_channel('direct-tcpip', (self.remote_host, self.remote_port),
-                                               client_socket.getpeername())
-        except Exception as e:
-            print(f"Failed to open channel: {e}")
-            return
-
-        while True:
-            r, w, x = select.select([client_socket, chan], [], [])
-            if client_socket in r:
-                data = client_socket.recv(1024)
-                if len(data) == 0:
-                    break
-                chan.send(data)
-            if chan in r:
-                data = chan.recv(1024)
-                if len(data) == 0:
-                    break
-                client_socket.send(data)
-
-        chan.close()
-        client_socket.close()
-
-    def start(self):
-        while True:
-            client_socket, client_addr = self.accept()
-            threading.Thread(target=self.handle, args=(client_socket,)).start()
 
 
 def forward_tunnel(local_port, remote_host, remote_port, transport):
@@ -424,21 +397,29 @@ def create_local_forwarding(task, pdbc: DML, client: paramiko.SSHClient):
 def main(client: paramiko.SSHClient):
     # 添加一个-s参数
     parser = argparse.ArgumentParser()
-    parser.add_argument('-s', '--shutdown', help='shutdown the task', action='store_true')
+    parser.add_argument('-s', '--shutdown', type=str, choices=['true', 'false'], help='shutdown the task')
+    parser.add_argument('-d', '--default_all', type=str, choices=['true', 'false'], help='use default user and task')
+    parser.add_argument('-dt', '--default_task', type=str, choices=['true', 'false'], help='use default task')
+    parser.add_argument('-du', '--default_user', type=str, choices=['true', 'false'], help='use default user')
+
     args = parser.parse_args()
+    s_value = args.shutdown.lower() == 'true'
+    d_value = args.default_all.lower() == 'true'
+    dt_value = args.default_task.lower() == 'true' or d_value
+    du_value = args.default_user.lower() == 'true' or d_value
 
     s = requests.Session()
     # 移除默认的 Connection 头部
     if 'Connection' in s.headers:
         del s.headers['Connection']
     pdbc = DML()
-    user = choose_account(pdbc)
+    user = choose_account(pdbc, using_default=du_value)
     # 更新Tasks
-    task = choose_task(user, pdbc)
+    task = choose_task(user, pdbc, using_default=dt_value)
     # ShutDown(task.id, user, pdbc)
     # 仅当状态为6（已关机）时，才执行开机操作
     # 若存在-s参数，则执行关机指令
-    if args.shutdown:
+    if s_value:
         ShutDown(task.id, user, pdbc)
         exit("关机成功！")
     if int(task.status) == 6:
@@ -448,21 +429,9 @@ def main(client: paramiko.SSHClient):
             exit("开机失败！")
     # 启用本地ssh代理
     create_local_forwarding(task, pdbc, client)
-    pass
 
-
-# def signal_handler(signum, frame):
-#     print(f"Signal {signum} received, performing cleanup...")
-#     # Perform any cleanup here
-#     sys.exit(0)
 
 if __name__ == '__main__':
-    # import signal
-    #
-    # # Register signal handlers
-    # signal.signal(signal.SIGINT, signal_handler)  # Handle Ctrl+C
-    # signal.signal(signal.SIGTERM, signal_handler)  # Handle kill
-    # signal.signal(signal.SIGTSTP, signal_handler)  # Handle Ctrl+Z
     cli = paramiko.SSHClient()
     try:
         main(cli)
