@@ -11,9 +11,10 @@
 
 ## Main features of this project contains
 
-- Simulating the login process of the training platform to get the token
-- Simulating the process of getting the tasks list
-- Simulating the process of startup and shutdown
+- Simulating the login process of the training platform to get the token.
+- Simulating the process of getting the tasks list.
+- Simulating the process of startup and shutdown.
+- **COMING SOON: Keepalive Function, which means it can do task-wise start to extend release time.**
 
 ## How to use
 
@@ -22,9 +23,9 @@
 - #### SQLite3
     - Download the SQLite3 from [Here](https://www.sqlite.org/download.html), the most common choice is both
       of [sqlite-dll-win-x64-3460100.zip](https://www.sqlite.org/download.html#:~:text=sqlite%2Ddll%2Dwin%2Dx64%2D3460100.zip)
-      and [sqlite-tools-win-x64-3460100.zip](https://www.sqlite.org/2024/sqlite-tools-win-x64-3460100.zip)
-    - ![img.png](images/img.png)
-    - Add the path of the SQLite3 to the environment variable
+      and [sqlite-tools-win-x64-3460100.zip](https://www.sqlite.org/2024/sqlite-tools-win-x64-3460100.zip).
+      ![img.png](images/img.png)
+    - Add the path of the SQLite3 to the environment variable.
 - #### Python
     - If you want to compile the project by yourself, I recommend you to use **Python 3.9**.
 
@@ -36,11 +37,11 @@
 ### Run
 
 - Open Terminal under Windows 11 or any terminal and run as following command:
-- **At the first time**, you should run like this to install the dependencies based on `./requirements.txt`:
 
-```shell
-opgpum.bat -r
-```
+  **At the first time**, you should run like this to install the dependencies based on `./requirements.txt`:
+    ```shell
+    opgpum.bat -r
+    ```
 
 - There are some options you can use.:
   - `-r`, `--requirements`: Install the dependencies based on `./requirements.txt`
