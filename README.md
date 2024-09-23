@@ -14,8 +14,11 @@
 - Simulating the login process of the training platform to get the token.
 - Simulating the process of getting the tasks list.
 - Simulating the process of startup and shutdown.
-- **COMING SOON: Keepalive Function, which means it can do task-wise start to extend release time.**
 
+**TODO:**
+
+- **COMING SOON: Keepalive Function, which means it can do task-wise start to extend release time.**
+- **COMING SOON: Check task status.**
 ## How to use
 
 ### Installation
