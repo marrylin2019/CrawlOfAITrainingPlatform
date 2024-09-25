@@ -44,7 +44,7 @@
 
   **At the first time**, you should run like this to install the dependencies based on `./requirements.txt`:
     ```shell
-    opgpum.bat -r
+    opgpum -r
     ```
 
 - There are some options you can use.:
