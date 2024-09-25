@@ -36,7 +36,8 @@
 
 - Under Windows OS, open the OS environment settings and add the `./batch` folder into it.
 - **PAY ATTENTION**: The path should be the absolute path of the `./batch` folder.
-
+- Both this step and the above step adding the path of SQLite3 to the OS environment can follow this way:
+  ![Add path to the OS environment](./images/steps.png)
 ### Run
 
 - Open Terminal under Windows 11 or any terminal and run as following command:
