@@ -1,6 +1,8 @@
 import argparse
 import curses
+import os
 import sys
+from pathlib import Path
 
 import paramiko
 import requests
@@ -64,37 +66,53 @@ def choose_task(user, pdbc: DML, using_default=False):
 def args_parser():
     # 添加一个-s参数
     parser = argparse.ArgumentParser()
-    parser.add_argument('-s', '--shutdown', type=str, choices=['true', 'false'], help='shutdown the task')
-    parser.add_argument('-d', '--default_all', type=str, choices=['true', 'false'], help='use default user and task')
-    parser.add_argument('-dt', '--default_task', type=str, choices=['true', 'false'], help='use default task')
-    parser.add_argument('-du', '--default_user', type=str, choices=['true', 'false'], help='use default user')
+    parser.add_argument('-s', '--shutdown', action='store_true', help='shutdown the task')
+    parser.add_argument('-r', '--requirements', action='store_true',
+                        help='Install the dependencies based on ./requirements.txt;')
+    parser.add_argument('-d', '--default_all', action='store_true', help='use default user and task')
+    parser.add_argument('-dt', '--default_task', action='store_true', help='use default task')
+    parser.add_argument('-du', '--default_user', action='store_true', help='use default user')
+    parser.add_argument('--python_path', type=str, help='python path')
+    parser.add_argument('--pip_path', type=str, help='pip path')
+    parser.add_argument('--requirements_path', type=str, help='requirements path')
 
     args = parser.parse_args()
-    s_flag = args.shutdown.lower() == 'true'
-    d_flag = args.default_all.lower() == 'true'
-    dt_flag = args.default_task.lower() == 'true' or d_flag
-    du_flag = args.default_user.lower() == 'true' or d_flag
-    return s_flag, dt_flag, du_flag
+    args.default_task = args.default_all or args.default_task
+    args.default_user = args.default_all or args.default_user
+    args.python_path = Path(args.python_path)
+    args.pip_path = Path(args.pip_path)
+    args.requirements_path = Path(args.requirements_path)
+    return args
 
 
 def main(client: paramiko.SSHClient):
-    shutdown_flag, default_task_flag, default_user_flag = args_parser()
+    args = args_parser()
+
+    if args.requirements:
+        if not (args.python_path.exists() and args.pip_path.exists() and args.requirements_path.exists()):
+            exit(
+                "文件不完整，缺少python、pip或requirements文件，请检查batch文件中的python、pip或requirements参数设置是否正确！")
+        os.system(f'{args.python_path} -m pip install -r requirements.txt')
+        os.system('cls')
+        print('依赖安装完成！')
 
     s = requests.Session()
     # 移除默认的 Connection 头部
     if 'Connection' in s.headers:
         del s.headers['Connection']
     pdbc = DML()
-    user = choose_account(pdbc, using_default=default_user_flag)
+    user = choose_account(pdbc, using_default=args.default_user)
     # 更新Tasks
-    task = choose_task(user, pdbc, using_default=default_task_flag)
+    task = choose_task(user, pdbc, using_default=args.default_task)
     # ShutDown(task.id, user, pdbc)
     # 仅当状态为6（已关机）时，才执行开机操作
     # 若存在-s参数，则执行关机指令
-    if shutdown_flag:
+    if args.shutdown:
+        print("正在关机...")
         ShutDown(task.id, user, pdbc)
         exit("关机成功！")
     if int(task.status) == 6:
+        print("正在开机...")
         if SetUp(task.id, user, pdbc):
             print("开机成功！")
         else:
