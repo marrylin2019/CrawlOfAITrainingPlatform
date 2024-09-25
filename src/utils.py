@@ -2,6 +2,7 @@ import json
 import re
 import socket
 import threading
+from datetime import datetime
 from pathlib import PurePosixPath as Path
 from time import sleep
 from typing import Optional, Literal
@@ -9,7 +10,7 @@ from typing import Optional, Literal
 import requests
 import select
 
-from src import TMP_PATH, BASE_URL, DEFAULT_HEADERS
+from src import TMP_PATH, BASE_URL, DEFAULT_HEADERS, MIN_KEEPALIVE_INTERVAL
 from src.persistence import DML
 
 
@@ -209,9 +210,10 @@ def StatusStabilizer(taskId: str, user, pdbc: DML, times: int = 0) -> int:
     return int(pdbc.query_record(taskId).status)
 
 
-def SetUp(taskId: str, user, pdbc: DML, refresh_token: bool = False) -> bool:
+def SetUp(taskId: str, user, pdbc: DML, refresh_token: bool = False, no_gpu_model=False) -> bool:
     """
     开机，返回是否开机成功
+    :param no_gpu_model:
     :param refresh_token:
     :param taskId:
     :param user:
@@ -220,11 +222,13 @@ def SetUp(taskId: str, user, pdbc: DML, refresh_token: bool = False) -> bool:
     """
     token = user.token if not refresh_token else Login(user).token
     status = StatusStabilizer(taskId, user, pdbc)
+    # 仅当状态为6（已关机）时，才执行开机操作
     if status == 6:
         # 执行开机
         resp = Request(
             'GET',
-            path=Path(f'api/airestserver/task/startContainer/{taskId}'),
+            # 根据是否使用无卡模式选择不同的开机接口
+            path=Path(f'api/airestserver/task/{"startContainer" if no_gpu_model else "notGpuModel"}/{taskId}'),
             headers={
                 'Front-Token': token,
                 'Referer': str(BASE_URL / 'ai-center/my-task'),
@@ -243,7 +247,11 @@ def SetUp(taskId: str, user, pdbc: DML, refresh_token: bool = False) -> bool:
                 # 未知的请求错误
                 exit("请求异常！服务器响应信息：" + resp['msg'])
         status = StatusStabilizer(taskId, user, pdbc)
-        return status == 4
+        if status == 4:
+            GetTasks(user, pdbc)
+            return True
+        else:
+            return False
     return False
 
 
@@ -258,8 +266,9 @@ def ShutDown(taskId: str, user, pdbc: DML, refresh_token: bool = False) -> bool:
     """
     token = user.token if not refresh_token else Login(user).token
     status = StatusStabilizer(taskId, user, pdbc)
-    if status == 4:
-        # 执行开机
+    # 仅当状态为4（运行中）或9（无卡模式）时，才执行关机操作
+    if status == 4 or status == 9:
+        # 执行关机
         resp = Request(
             'GET',
             path=Path(f'api/airestserver/task/killContainer/{taskId}'),
@@ -276,10 +285,62 @@ def ShutDown(taskId: str, user, pdbc: DML, refresh_token: bool = False) -> bool:
         if int(resp['code']) < 0:
             # token失效，重新获取token后重试
             if int(resp['code']) == -2:
-                return SetUp(taskId, user, pdbc, True)
+                return ShutDown(taskId, user, pdbc, True)
             else:
                 # 未知的请求错误
                 exit("请求异常！服务器响应信息：" + resp['msg'])
         status = StatusStabilizer(taskId, user, pdbc)
-        return status == 6
+        if status == 6:
+            GetTasks(user, pdbc)
+            return True
+        else:
+            return False
     return False
+
+
+def ShutDownAll(user, pdbc: DML):
+    GetTasks(user, pdbc)
+    tasks = pdbc.query_all_record()
+    for task in tasks:
+        ShutDown(task.id, user, pdbc)
+    return "已关机所有运行中的任务！"
+
+
+def CheckStatus(user, pdbc: DML, for_all: bool = False, task: Optional = None):
+    if for_all:
+        GetTasks(user, pdbc)
+        tasks = pdbc.query_all_record()
+        return '\n'.join([f"任务[{task.note}]({task.name})状态为：{task.str_status}" for task in tasks])
+    elif task:
+        return f"任务[{task.note}]({task.name})状态为：{task.str_status}"
+    else:
+        return "请指定task！"
+
+
+def KeepAlive(user, pdbc: DML):
+    """
+    将临近过期的实例（任务）开机并关机以延长实例（任务）的有效期
+    :param user:
+    :param pdbc:
+    :return:
+    """
+    # 更新任务状态
+    GetTasks(user, pdbc)
+
+    tasks = pdbc.query_all_record()
+    kept_tasks = []
+    for task in tasks:
+        if task.release_time is not None:
+            release_time = int(datetime.strptime(task.release_time, '%Y-%m-%d %H:%M:%S').timestamp()) - int(
+                datetime.now().timestamp())
+            if release_time < MIN_KEEPALIVE_INTERVAL:
+                kept_tasks.append(task)
+                SetUp(task.id, user, pdbc, no_gpu_model=True)
+                StatusStabilizer(task.id, user, pdbc)
+                ShutDown(task.id, user, pdbc)
+    if len(kept_tasks) == 0:
+        return "没有需要续期的任务！"
+    else:
+        # 更新任务状态
+        GetTasks(user, pdbc)
+        return f"已续期以下任务：\n" + '\n'.join([f"[{task.note}]({task.name})" for task in kept_tasks])

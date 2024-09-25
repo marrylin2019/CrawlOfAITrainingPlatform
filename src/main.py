@@ -10,7 +10,7 @@ import requests
 from src.display import table
 from src.persistence import DML
 from src.port_forwading import create_local_forwarding
-from src.utils import GetTasks, ShutDown, SetUp
+from src.utils import GetTasks, ShutDown, SetUp, KeepAlive, CheckStatus, ShutDownAll
 
 
 def choose_account(pdbc: DML, using_default=False, mark: bool = True):
@@ -63,20 +63,38 @@ def choose_task(user, pdbc: DML, using_default=False):
     return task
 
 
-def args_parser():
-    # 添加一个-s参数
+def args_parser() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument('-s', '--shutdown', action='store_true', help='shutdown the task')
-    parser.add_argument('-r', '--requirements', action='store_true',
-                        help='Install the dependencies based on ./requirements.txt;')
+
+    # -ka -s -c两两不能同时使用
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('-s', '--shutdown', action='store_true', help='shutdown the task')
+    group.add_argument('-c', '--check_status', action='store_true', help='check the status of the task')
+    group.add_argument('-ka', '--keep_alive', action='store_true', help='delay the task release time')
+
     parser.add_argument('-d', '--default_all', action='store_true', help='use default user and task')
     parser.add_argument('-dt', '--default_task', action='store_true', help='use default task')
     parser.add_argument('-du', '--default_user', action='store_true', help='use default user')
+    parser.add_argument('-a', '--all', action='store_true', help='choose all. This CAN NOT use with -da, -dt, -du, -ka')
+
+    parser.add_argument('-r', '--requirements', action='store_true',
+                        help='Install the dependencies based on ./requirements.txt;')
+
     parser.add_argument('--python_path', type=str, help='python path')
     parser.add_argument('--pip_path', type=str, help='pip path')
     parser.add_argument('--requirements_path', type=str, help='requirements path')
 
     args = parser.parse_args()
+    # TODO: 允许-a在-c的情况下与-du同时使用
+    # TODO: 允许-a在-s的情况下与-du同时使用
+    # TODO: 不允许-a与-d或-dt同时使用，但允许-a与-du同时使用
+    # TODO: 不允许-ka与-d或-dt同时使用，但允许-ka与-du同时使用
+    # TODO: 不允许-ka与-a同时使用
+    # -a 与 -da、-dt、-du、-ka 中的任何一个不能同时使用
+    if args.all and (args.default_all or args.default_task or args.default_user or args.keep_alive):
+        parser.error(
+            'argument -a/--all: not allowed with argument -d/--default_user, -da/--default_all, -dt/--default_task or -ka/--keep_alive')
+
     args.default_task = args.default_all or args.default_task
     args.default_user = args.default_all or args.default_user
     args.python_path = Path(args.python_path)
@@ -102,11 +120,26 @@ def main(client: paramiko.SSHClient):
         del s.headers['Connection']
     pdbc = DML()
     user = choose_account(pdbc, using_default=args.default_user)
+    # 若同时存在-a和-c参数，则执行查询指令，查询所有任务的状态，并退出
+    if args.all and args.check_status:
+        exit(CheckStatus(user, pdbc, for_all=True))
+    # 若同时存在-a和-s参数，则执行关机指令，并退出
+    if args.all and args.shutdown:
+        print("正在关机...")
+        ShutDownAll(user, pdbc)
+        exit("关机成功！")
+    # 若存在-ka参数，则延长任务释放时间
+    if args.keep_alive:
+        exit(KeepAlive(user, pdbc))
+
     # 更新Tasks
     task = choose_task(user, pdbc, using_default=args.default_task)
-    # ShutDown(task.id, user, pdbc)
-    # 仅当状态为6（已关机）时，才执行开机操作
-    # 若存在-s参数，则执行关机指令
+
+    # 若存在-c参数，则执行查询指令，查询任务状态，并退出
+    if args.check_status:
+        exit(CheckStatus(user, pdbc, task))
+
+    # 若存在-s参数，则执行关机指令，并退出
     if args.shutdown:
         print("正在关机...")
         ShutDown(task.id, user, pdbc)

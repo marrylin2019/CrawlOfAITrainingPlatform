@@ -14,11 +14,13 @@
 - Simulating the login process of the training platform to get the token.
 - Simulating the process of getting the tasks list.
 - Simulating the process of startup and shutdown.
+- Keepalive Function, which means it can do task-wise start to extend release time.
+- Check task status.
 
 **TODO:**
 
-- **COMING SOON: Keepalive Function, which means it can do task-wise start to extend release time.**
-- **COMING SOON: Check task status.**
+- [ ] **Reduce the query frequency and improve the efficiency of program operation.**
+
 ## How to use
 
 ### Installation
@@ -49,7 +51,10 @@
 
 - There are some options you can use.:
   - `-r`, `--requirements`: Install the dependencies based on `./requirements.txt`
+  - `-a`, `-all`: Choose all. This CAN NOT use with -da, -dt, -du, -ka
   - `-s`, `--shutdown`: Shutdown the task
+  - `-c`, `--check`: Check the status of the task
+  - `-ka`, `--keepalive`: delay the task release time
   - `-d`, `--default_all`: Run the project using the default user and task
   - `-du`, `--default_user`: Run the project using the default user
   - `-dt`, `--default_task`: Run the project using the default task
