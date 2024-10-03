@@ -46,6 +46,11 @@ def choose_account(pdbc: DML, using_default=False, mark: bool = True):
 def choose_task(user, pdbc: DML, using_default=False):
     GetTasks(user, pdbc)
     all_tasks = pdbc.query_all_record()
+
+    # 如果没有任务，返回None
+    if not all_tasks:
+        return None
+
     d_t = pdbc.query_config('default_task_id')
     if d_t:
         flag = input(
@@ -134,6 +139,9 @@ def main(client: paramiko.SSHClient):
 
     # 更新Tasks
     task = choose_task(user, pdbc, using_default=args.default_task)
+
+    if not task:
+        exit("当前没有实例，请登录平台创建实例后再使用本脚本！")
 
     # 若存在-c参数，则执行查询指令，查询任务状态，并退出
     if args.check_status:
