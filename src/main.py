@@ -91,10 +91,6 @@ def args_parser() -> argparse.Namespace:
 
     args = parser.parse_args()
 
-    # -ka -s -c 三者必须有一个
-    if not any([args.shutdown, args.check_status, args.keep_alive]):
-        parser.error('at least one of -s/--shutdown, -c/--check_status, -ka/--keep_alive must be specified')
-
     # TODO: 允许-a在-c的情况下与-du同时使用
     # TODO: 允许-a在-s的情况下与-du同时使用
     # TODO: 不允许-a与-d或-dt同时使用，但允许-a与-du同时使用
