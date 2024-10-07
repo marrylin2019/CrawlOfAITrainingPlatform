@@ -90,6 +90,11 @@ def args_parser() -> argparse.Namespace:
     parser.add_argument('--requirements_path', type=str, help='requirements path')
 
     args = parser.parse_args()
+
+    # -ka -s -c 三者必须有一个
+    if not any([args.shutdown, args.check_status, args.keep_alive]):
+        parser.error('at least one of -s/--shutdown, -c/--check_status, -ka/--keep_alive must be specified')
+
     # TODO: 允许-a在-c的情况下与-du同时使用
     # TODO: 允许-a在-s的情况下与-du同时使用
     # TODO: 不允许-a与-d或-dt同时使用，但允许-a与-du同时使用
@@ -98,7 +103,9 @@ def args_parser() -> argparse.Namespace:
     # -a 与 -da、-dt、-du、-ka 中的任何一个不能同时使用
     if args.all and (args.default_all or args.default_task or args.default_user or args.keep_alive):
         parser.error(
-            'argument -a/--all: not allowed with argument -d/--default_user, -da/--default_all, -dt/--default_task or -ka/--keep_alive')
+            'argument -a/--all: '
+            'not allowed with argument -d/--default_user, -da/--default_all, -dt/--default_task or -ka/--keep_alive'
+        )
 
     args.default_task = args.default_all or args.default_task
     args.default_user = args.default_all or args.default_user
