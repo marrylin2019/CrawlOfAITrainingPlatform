@@ -210,10 +210,10 @@ def StatusStabilizer(taskId: str, user, pdbc: DML, times: int = 0) -> int:
     return int(pdbc.query_record(taskId).status)
 
 
-def SetUp(taskId: str, user, pdbc: DML, refresh_token: bool = False, no_gpu_model=False) -> bool:
+def SetUp(taskId: str, user, pdbc: DML, refresh_token: bool = False, no_gpu_mode=False) -> bool:
     """
     开机，返回是否开机成功
-    :param no_gpu_model:
+    :param no_gpu_mode:
     :param refresh_token:
     :param taskId:
     :param user:
@@ -228,7 +228,7 @@ def SetUp(taskId: str, user, pdbc: DML, refresh_token: bool = False, no_gpu_mode
         resp = Request(
             'GET',
             # 根据是否使用无卡模式选择不同的开机接口
-            path=Path(f'api/airestserver/task/{"startContainer" if no_gpu_model else "notGpuModel"}/{taskId}'),
+            path=Path(f'api/airestserver/task/{"notGpuModel" if no_gpu_mode else "startContainer"}/{taskId}'),
             headers={
                 'Front-Token': token,
                 'Referer': str(BASE_URL / 'ai-center/my-task'),
@@ -242,7 +242,7 @@ def SetUp(taskId: str, user, pdbc: DML, refresh_token: bool = False, no_gpu_mode
         if int(resp['code']) < 0:
             # token失效，重新获取token后重试
             if int(resp['code']) == -2:
-                return SetUp(taskId, user, pdbc, True)
+                return SetUp(taskId, user, pdbc, refresh_token=True)
             else:
                 # 未知的请求错误
                 exit("请求异常！服务器响应信息：" + resp['msg'])
@@ -335,7 +335,7 @@ def KeepAlive(user, pdbc: DML):
                 datetime.now().timestamp())
             if release_time < MIN_KEEPALIVE_INTERVAL:
                 kept_tasks.append(task)
-                SetUp(task.id, user, pdbc, no_gpu_model=True)
+                SetUp(task.id, user, pdbc, no_gpu_mode=True)
                 StatusStabilizer(task.id, user, pdbc)
                 ShutDown(task.id, user, pdbc)
     if len(kept_tasks) == 0:
