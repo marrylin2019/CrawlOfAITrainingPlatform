@@ -2,6 +2,7 @@ from pathlib import Path
 
 from yarl import URL
 
+PARAMIKO_LOG_PATH = Path('.tmp/paramiko.log').absolute()
 DB_PATH = Path('data/hebnu_ai.db').absolute()
 TMP_PATH = Path('.tmp').absolute()
 # 任务释放小于3天的任务

@@ -3,6 +3,7 @@ import socket
 
 import paramiko
 
+from src import PARAMIKO_LOG_PATH
 from src.persistence import DML
 from src.utils import ForwardServer
 
@@ -37,12 +38,14 @@ def create_local_forwarding(task, pdbc: DML, client: paramiko.SSHClient):
         pdbc.update_config('ssh_tunnel_port', ssh_tunnel_port)
         local_port = ssh_tunnel_port
 
-    # 创建SSH客户端
-    client.load_system_host_keys()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())  # 自动添加未知主机密钥
-
-    # 使用提供的凭据连接
-    client.connect(task.agent_ip, username='root', password=task.ssh_passwd, port=int(task.ssh_port))
+    try:
+        # 创建SSH客户端
+        client.load_system_host_keys()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())  # 自动添加未知主机密钥
+        # 使用提供的凭据连接
+        client.connect(task.agent_ip, username='root', password=task.ssh_passwd, port=int(task.ssh_port))
+    except paramiko.ssh_exception.SSHException as e:
+        exit(f"Failed to connect to agent: {e}\n详细信息请查看日志文件{PARAMIKO_LOG_PATH}")
 
     # 创建隧道
     try:

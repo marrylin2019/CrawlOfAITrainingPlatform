@@ -7,6 +7,7 @@ from pathlib import Path
 import paramiko
 import requests
 
+from src import PARAMIKO_LOG_PATH
 from src.display import table
 from src.persistence import DML
 from src.port_forwading import create_local_forwarding
@@ -166,6 +167,9 @@ def main(client: paramiko.SSHClient):
 
 
 if __name__ == '__main__':
+    # 记录日志
+    paramiko.util.log_to_file(PARAMIKO_LOG_PATH)
+
     cli = paramiko.SSHClient()
     try:
         main(cli)
