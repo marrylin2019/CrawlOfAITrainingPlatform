@@ -2,6 +2,7 @@ import os
 import socket
 
 import paramiko
+import pyperclip
 
 from src import PARAMIKO_LOG_PATH
 from src.persistence import DML
@@ -28,8 +29,8 @@ def create_local_forwarding(task, pdbc: DML, client: paramiko.SSHClient):
     """
     # 清屏
     os.system("cls")
-    # 使用库将将密码复制到剪切板
-    os.system(f'echo {task.ssh_passwd.strip()}| clip')
+    # 使用库将密码复制到剪切板，不要写入换行
+    pyperclip.copy(task.ssh_passwd)
     print(f"正在创建本地ssh端口转发\n当前实例：{task.note}({task.name})\n当前ssh密码：{task.ssh_passwd}(已复制到剪切板)")
     # 获取本地ssh代理端口
     local_port = pdbc.query_config('ssh_tunnel_port')
