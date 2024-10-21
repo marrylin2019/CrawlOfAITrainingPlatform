@@ -344,3 +344,26 @@ def KeepAlive(user, pdbc: DML):
         # 更新任务状态
         GetTasks(user, pdbc)
         return f"已续期以下任务：\n" + '\n'.join([f"[{task.note}]({task.name})" for task in kept_tasks])
+
+
+def QBalance(user) -> str:
+    """
+    查询余额
+    :param user:
+    :return
+    """
+    resp = Request("POST", Path("api/user/user/account/balanceCoupon"), headers={
+        'Front-Token': user.token,
+        'Referer': str(BASE_URL / 'front-user/homepage'),
+        'Content-Type': 'application/json',
+    }, cookies={
+        'token': user.token
+    }, data=json.dumps({"productType": 1})).text
+
+    try:
+        resp = json.loads(resp)
+    except json.JSONDecodeError:
+        raise Exception("请求异常！服务器响应信息：" + resp)
+    if not int(resp['code']) == 0:
+        raise Exception("请求异常！服务器响应信息：" + resp['msg'])
+    return f"账户余额：{resp['data']['balance']}元"

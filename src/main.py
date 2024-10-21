@@ -11,7 +11,7 @@ from src import PARAMIKO_LOG_PATH
 from src.display import table
 from src.persistence import DML
 from src.port_forwading import create_local_forwarding
-from src.utils import GetTasks, ShutDown, SetUp, KeepAlive, CheckStatus, ShutDownAll
+from src.utils import GetTasks, ShutDown, SetUp, KeepAlive, CheckStatus, ShutDownAll, QBalance
 
 
 def choose_account(pdbc: DML, using_default=False, mark: bool = True):
@@ -77,6 +77,7 @@ def args_parser() -> argparse.Namespace:
     group.add_argument('-s', '--shutdown', action='store_true', help='shutdown the task')
     group.add_argument('-c', '--check_status', action='store_true', help='check the status of the task')
     group.add_argument('-ka', '--keep_alive', action='store_true', help='delay the task release time')
+    group.add_argument('-b', '--balance', action='store_true', help='balance the task')
 
     parser.add_argument('-d', '--default_all', action='store_true', help='use default user and task')
     parser.add_argument('-dt', '--default_task', action='store_true', help='use default task')
@@ -140,6 +141,9 @@ def main(client: paramiko.SSHClient):
     # 若存在-ka参数，则延长任务释放时间
     if args.keep_alive:
         exit(KeepAlive(user, pdbc))
+    # 若存在-b参数，则执行余额查询
+    if args.balance:
+        exit(QBalance(user))
 
     # 更新Tasks
     task = choose_task(user, pdbc, using_default=args.default_task)
