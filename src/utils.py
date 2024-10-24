@@ -346,12 +346,19 @@ def KeepAlive(user, pdbc: DML):
         return f"已续期以下任务：\n" + '\n'.join([f"[{task.note}]({task.name})" for task in kept_tasks])
 
 
-def QBalance(user) -> str:
+def QBalance(user, pdbc: DML, force_refresh_token: bool = False) -> str:
     """
     查询余额
+    :param force_refresh_token:
+    :param pdbc:
     :param user:
     :return
     """
+    # 确保token存在
+    token = user.token if user.token and not force_refresh_token else Login(user).token
+    # token写入数据库
+    pdbc.update_user_token(user.account, token)
+
     resp = Request("POST", Path("api/user/user/account/balanceCoupon"), headers={
         'Front-Token': user.token,
         'Referer': str(BASE_URL / 'front-user/homepage'),
@@ -363,7 +370,9 @@ def QBalance(user) -> str:
     try:
         resp = json.loads(resp)
     except json.JSONDecodeError:
-        raise Exception("请求异常！服务器响应信息：" + resp)
+        raise Exception(f"请求异常！服务器响应信息：" + resp)
     if not int(resp['code']) == 0:
-        raise Exception("请求异常！服务器响应信息：" + resp['msg'])
+        if int(resp['code']) == -2:
+            return QBalance(user, pdbc, True)
+        raise Exception(f"无法处理的请求异常！[{resp['code']}]{resp['msg']}")
     return f"账户余额：{resp['data']['balance']}元"

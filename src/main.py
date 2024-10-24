@@ -143,7 +143,7 @@ def main(client: paramiko.SSHClient):
         exit(KeepAlive(user, pdbc))
     # 若存在-b参数，则执行余额查询
     if args.balance:
-        exit(QBalance(user))
+        exit(QBalance(user, pdbc))
 
     # 更新Tasks
     task = choose_task(user, pdbc, using_default=args.default_task)
