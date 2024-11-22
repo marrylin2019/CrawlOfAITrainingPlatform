@@ -6,7 +6,7 @@ PARAMIKO_LOG_PATH = Path('.tmp/paramiko.log').absolute()
 DB_PATH = Path('data/hebnu_ai.db').absolute()
 TMP_PATH = Path('.tmp').absolute()
 # 任务释放小于3天的任务
-MIN_KEEPALIVE_INTERVAL = 3 * 24 * 3600
+KEEPALIVE_INTERVAL = 3 * 24 * 3600
 
 STATUS_MAP = {
     1: '镜像下载中',

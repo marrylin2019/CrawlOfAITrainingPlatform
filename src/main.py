@@ -119,7 +119,8 @@ def main(client: paramiko.SSHClient):
     if args.requirements:
         if not (args.python_path.exists() and args.pip_path.exists() and args.requirements_path.exists()):
             exit(
-                "文件不完整，缺少python、pip或requirements文件，请检查batch文件中的python、pip或requirements参数设置是否正确！")
+                "文件不完整，缺少python、pip或requirements文件，请检查batch文件中的python、pip或requirements参数设置是否正确！"
+            )
         os.system(f'{args.python_path} -m pip install -r requirements.txt')
         os.system('cls')
         print('依赖安装完成！')

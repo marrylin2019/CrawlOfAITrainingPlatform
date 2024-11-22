@@ -2,7 +2,7 @@ import json
 import re
 import socket
 import threading
-from datetime import datetime
+from datetime import datetime as dt
 from pathlib import PurePosixPath as Path
 from time import sleep
 from typing import Optional, Literal
@@ -10,7 +10,7 @@ from typing import Optional, Literal
 import requests
 import select
 
-from src import TMP_PATH, BASE_URL, DEFAULT_HEADERS, MIN_KEEPALIVE_INTERVAL
+from src import TMP_PATH, BASE_URL, DEFAULT_HEADERS, KEEPALIVE_INTERVAL
 from src.persistence import DML
 
 
@@ -317,9 +317,10 @@ def CheckStatus(user, pdbc: DML, for_all: bool = False, task: Optional = None):
         return "请指定task！"
 
 
-def KeepAlive(user, pdbc: DML):
+def KeepAlive(user, pdbc: DML, force_refresh: bool = True) -> str:
     """
     将临近过期的实例（任务）开机并关机以延长实例（任务）的有效期
+    :param force_refresh: symbol of whether to force refresh the token
     :param user:
     :param pdbc:
     :return:
@@ -330,14 +331,18 @@ def KeepAlive(user, pdbc: DML):
     tasks = pdbc.query_all_record()
     kept_tasks = []
     for task in tasks:
-        if task.release_time is not None:
-            release_time = int(datetime.strptime(task.release_time, '%Y-%m-%d %H:%M:%S').timestamp()) - int(
-                datetime.now().timestamp())
-            if release_time < MIN_KEEPALIVE_INTERVAL:
-                kept_tasks.append(task)
-                SetUp(task.id, user, pdbc, no_gpu_mode=True)
-                StatusStabilizer(task.id, user, pdbc)
-                ShutDown(task.id, user, pdbc)
+        # 不满足条件的不刷新
+        if all([
+            not force_refresh,
+            task.release_time is not None,
+            int(dt.strptime(task.release_time, '%Y-%m-%d %H:%M:%S').timestamp()) - int(
+                dt.now().timestamp()) > KEEPALIVE_INTERVAL
+        ]):
+            continue
+        kept_tasks.append(task)
+        SetUp(task.id, user, pdbc, no_gpu_mode=True)
+        StatusStabilizer(task.id, user, pdbc)
+        ShutDown(task.id, user, pdbc)
     if len(kept_tasks) == 0:
         return "没有需要续期的任务！"
     else:
